@@ -13,6 +13,6 @@ fn main() {
 }
 
 fn draw(frame: &mut Frame) {
-    let text = Text::raw("Hello World!");
+    let text = Text::raw("Hello Tom!");
     frame.render_widget(text, frame.area());
 }
