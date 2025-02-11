@@ -13,60 +13,78 @@ use ratatui::{
 
 fn main() -> io::Result<()> {
     let mut terminal= ratatui::init();
-    let app_result = App::default().run(&mut terminal);
+    let app_result = App::new(false, Character::new(0, 0, 'C')).run(&mut terminal);
     ratatui::restore();
     app_result
 }
 
 #[derive(Debug, Default)]
+pub struct Character {
+    x: usize,
+    y: usize,
+    character: char,
+}
+
+#[derive(Debug, Default)]
 pub struct App {
-    counter: u8,
     exit: bool,
+    character: Character,
+}
+
+impl Character {
+    pub fn new(x: usize, y: usize, character: char) -> Self {
+        Self { x, y, character }
+    }
+
+    fn handle_input(&mut self, key_event: KeyEvent, area: Rect) {
+        let m = area.width as usize;
+        let n = area.height as usize;
+        match key_event.code {
+            KeyCode::Left => if self.x > 0 {self.x -= 1} else {},
+            KeyCode::Right => if self.x < m - 1 {self.x += 1} else {},
+            KeyCode::Up => if self.y > 0 {self.y -= 1} else {},
+            KeyCode::Down => if self.y < n - 1 {self.y += 1} else {},
+            _ => {}
+        }
+    }
+
+    fn render(&self, buf: &mut Vec<Vec<char>>) {
+        if self.y < buf.len() && self.x < buf[0].len() {
+            buf[self.y][self.x] = self.character;
+        }
+    }
 }
 
 impl App {
+    pub fn new(exit: bool, character: Character) -> Self {
+        Self { exit, character }
+    }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
-            terminal.draw(|frame| self.draw(frame))?;
-            self.handle_events()?;
-        }
-        Ok(())
-    }
-
-    fn draw(&self, frame: &mut Frame) {
-        frame.render_widget(self, frame.area());
-    }
-
-    fn handle_events(&mut self) -> io::Result<()> {
-        match event::read()? {
-            Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
-                self.handle_key_event(key_event)
+            let mut frame = terminal.get_frame();
+            self.draw(&mut frame);
+            match event::read()? {
+                Event::Key(key_event) if key_event.kind == KeyEventKind::Press => {
+                    self.handle_input(key_event, &frame)
+                }
+                _ => {}
             }
-            _ => {}
-        };
+        }
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key_event: KeyEvent) {
+    pub fn handle_input(&mut self, key_event: KeyEvent, frame: &Frame) {
         match key_event.code {
-            KeyCode::Char('q') => self.exit(),
-            KeyCode::Left => if self.counter > 0 {self.decrement_counter()} else {},
-            KeyCode::Right => if self.counter < 255 {self.increment_counter()} else {},
-            _ => {}
+            KeyCode::Char('q') => self.exit = true,
+            _ => self.character.handle_input(key_event, frame.area()),
         }
     }
 
-    fn exit(&mut self) {
-        self.exit = true;
-    } 
-
-    fn increment_counter(&mut self) {
-        self.counter += 1;
+    pub fn draw(&self, f: &mut Frame) {
+        let area = f.area();
+        f.render_widget(self, area);
     }
-
-    fn decrement_counter(&mut self) {
-        self.counter -= 1;
-    }
+            
 }
 
 impl Widget for &App {
@@ -84,47 +102,12 @@ impl Widget for &App {
             .title(title.centered())
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
+        let mut buffer = vec![vec!['.'; area.width as usize]; area.height as usize];
+        self.character.render(&mut buffer);
+        let text = buffer.iter().map(|row| row.iter().collect::<String>()).collect::<Vec<_>>().join("\n");
 
-        let counter_text = Text::from(vec![Line::from(vec![
-            "Value: ".into(),
-            self.counter.to_string().yellow(),
-        ])]);
-
-        Paragraph::new(counter_text)
-            .centered()
+        Paragraph::new(Text::from(text))
             .block(block)
             .render(area, buf);
-    }
-}
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use ratatui::style::Style;
-
-    #[test]
-    fn render() {
-        let app = App::default();
-        let mut buf = Buffer::empty(Rect::new(0,0,50,4));
-
-        app.render(buf.area, &mut buf);
-
-        let mut expected = Buffer::with_lines(vec![
-            "┏━━━━━━━━━━━━━ Counter App Tutorial ━━━━━━━━━━━━━┓",
-            "┃                    Value: 0                    ┃",
-            "┃                                                ┃",
-            "┗━ Decrement <Left> Increment <Right> Quit <Q> ━━┛",
-        ]);
-        let title_style = Style::new().bold();
-        let counter_style = Style::new().yellow();
-        let key_style = Style::new().blue().bold();
-        expected.set_style(Rect::new(14, 0, 22, 1), title_style);
-        expected.set_style(Rect::new(28, 1, 1, 1), counter_style);
-        expected.set_style(Rect::new(13, 3, 6, 1), key_style);
-        expected.set_style(Rect::new(30, 3, 7, 1), key_style);
-        expected.set_style(Rect::new(43, 3, 4, 1), key_style);
-
-        assert_eq!(buf, expected);
     }
 }
