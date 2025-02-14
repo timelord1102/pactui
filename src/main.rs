@@ -116,12 +116,16 @@ impl App {
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" PacMan ".bold());
+        let title = Line::from((" Score: ".to_owned() + &self.score.to_string() + " ").bold());
         let instructions = Line::from(vec![
-            " Decrement ".into(),
+            " Left ".into(),
             "<Left>".blue().bold(),
-            " Increment ".into(),
+            " Right ".into(),
             "<Right>".blue().bold(),
+            " Up ".into(),
+            "<Up>".blue().bold(),
+            " Down ".into(),
+            "<Down>".blue().bold(),
             " Quit ".into(),
             "<Q> ".blue().bold(),
         ]);
