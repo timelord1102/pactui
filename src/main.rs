@@ -3,11 +3,11 @@ use std::io;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
+layout::{Constraint, Direction, Layout, Rect},
     style::Stylize,
     symbols::border,
     text::{Line, Text},
-    widgets::{Block, Paragraph, Widget},
+    widgets::{Block, Paragraph, Widget, Borders},
     DefaultTerminal, Frame,
 };
 
@@ -35,6 +35,23 @@ impl App {
 
     fn draw(&self, frame: &mut Frame) {
         frame.render_widget(self, frame.area());
+
+        let layout = Layout::new(
+            Direction::Vertical,
+            [Constraint::Length(5), Constraint::Min(0)],
+        )
+        .split(Rect::new(0, 0, 5, 3));
+        //frame.render_widget(Paragraph::new("foo"), layout[0]);
+        //frame.render_widget(Paragraph::new("bar"), layout[1]);
+
+        frame.render_widget(
+            Paragraph::new("Top")
+                .block(Block::new().borders(Borders::ALL)),
+            layout[0]);
+        frame.render_widget(
+            Paragraph::new("Bottom")
+                .block(Block::new().borders(Borders::ALL)),
+            layout[1]);
     }
     
     fn handle_events(&mut self) -> io::Result<()> {
@@ -101,6 +118,7 @@ impl Widget for &App {
             "Value: ".into(),
             self.counter.to_string().yellow(),
         ])]);
+
 
         Paragraph::new(counter_text)
             .centered()
