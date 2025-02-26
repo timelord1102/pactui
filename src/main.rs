@@ -36,6 +36,7 @@ pub struct App {
     character: Character,
     board: Vec<Vec<Span<'static>>>,
     score: i32,
+    cheat: String,
 }
 
 impl Character {
@@ -52,13 +53,13 @@ impl Character {
         }
     }
 
-    fn handle_input(&mut self, key_event: KeyEvent) {
+    fn handle_input(&mut self, key_event: KeyEvent, cheat: &mut String) {
         match key_event.code {
             KeyCode::Left => self.direction = 'L',
             KeyCode::Right => self.direction = 'R',
             KeyCode::Up => self.direction = 'U',
             KeyCode::Down => self.direction = 'D',
-            _ => {}
+            _ => cheat.push(key_event.code.to_string().chars().next().unwrap()),
         }
     }
 
@@ -120,7 +121,7 @@ impl Character {
         }
 
         if buf[self.y][self.x].to_string() == ">" {
-            self.speed = 5;
+            self.speed = 50;
             self.speed_boost = true;
             self.boost_timer += 100;
         }
@@ -136,6 +137,7 @@ impl App {
             character,
             board: vec![],
             score: 0,
+            cheat: String::new(),
         }
     }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
@@ -162,7 +164,8 @@ impl App {
     pub fn handle_input(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Char('q') => self.exit = true,
-            _ => self.character.handle_input(key_event),
+            KeyCode::Char('x') => self.run_cheat(),
+            _ => self.character.handle_input(key_event, &mut self.cheat),
         }
     }
 
@@ -187,6 +190,18 @@ impl App {
             let y = rand::rng().random_range(0..self.board.len());
             self.board[y][x] = colorize('>');
         }
+    }
+
+    pub fn run_cheat(&mut self) {
+        match self.cheat.as_str() {
+            "speed" => {
+                self.character.speed = 5;
+                self.character.speed_boost = true;
+                self.character.boost_timer += 1000;
+            }
+            _ => {}
+        }
+        self.cheat.clear();
     }
 }
 
