@@ -1,4 +1,4 @@
-use std::io;
+/*use std::io;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
@@ -126,35 +126,195 @@ impl Widget for &App {
             .render(area, buf);
     }
 }
-   
+*/   
+use std::io;
 
-/*#[cfg(test)]
-mod tests {
-    use super::*;
-    use ratatui::style::Style;
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use ratatui::{
+    buffer::Buffer,
+    layout::Rect,
+    style::Stylize,
+    symbols::border,
+    text::{Line, Text},
+    widgets::{Block, Widget, Paragraph},
+    DefaultTerminal, Frame,
+};
 
-    #[test]
-    fn render() {
-        let app = App::default();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 50, 4));
+fn main() -> io::Result<()> {
+    let mut terminal= ratatui::init();
+    let app_result = App::new(false, Character::new(0, 0, 'C')).run(&mut terminal);
+    ratatui::restore();
+    app_result
+}
 
-        app.render(buf.area, &mut buf);
+#[derive(Debug, Default)]
+pub struct Character {
+    x: usize,
+    y: usize,
+    character: char,
+    direction: char,
+}
 
-        let mut expected = Buffer::with_lines(vec![
-            "┏━━━━━━━━━━━━━ Counter App Tutorial ━━━━━━━━━━━━━┓",
-            "┃                    Value: 0                    ┃",
-            "┃                                                ┃",
-            "┗━ Decrement <Left> Increment <Right> Quit <Q> ━━┛",
-        ]);
-        let title_style = Style::new().bold();
-        let counter_style = Style::new().yellow();
-        let key_style = Style::new().blue().bold();
-        expected.set_style(Rect::new(14, 0, 22, 1), title_style);
-        expected.set_style(Rect::new(28, 1, 1, 1), counter_style);
-        expected.set_style(Rect::new(13, 3, 6, 1), key_style);
-        expected.set_style(Rect::new(30, 3, 7, 1), key_style);
-        expected.set_style(Rect::new(43, 3, 4, 1), key_style);
+pub struct Wall {
+    x: usize,
+    y: usize,
+    height: usize,
+    width: usize,
+}
 
-        assert_eq!(buf, expected);
+
+#[derive(Debug, Default)]
+pub struct App {
+    exit: bool,
+    character: Character,
+    board: Vec<Vec<char>>,
+    score: i32,
+    //wall: Rect,
+}
+
+/*impl Wall{
+    pub fn new(x: usize, y: usize, height: usize, width: usize) -> Self{
+        Self{x ,y ,width ,height}
+    }
+    pub fn render(&self, buf: Vec<Vec<char>>){
+        for i in 0..self.height{
+            for j in 0..self.width{
+                if self.y + i < buf.len() && self.x + j < buf[0].len(){
+                    buf[self.y + i][self.x + j] = '#';
+                }
+            }
+        }
     }
 }*/
+
+impl Character {
+    pub fn new(x: usize, y: usize, character: char) -> Self {
+        Self { x, y, character, direction: 'R' }
+    }
+
+    fn handle_input(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Left => self.direction = 'L',
+            KeyCode::Right => self.direction = 'R',
+            KeyCode::Up => self.direction = 'U',
+            KeyCode::Down => self.direction = 'D',
+            _ => {}
+        }
+    }
+
+    fn render(&mut self, buf: &mut Vec<Vec<char>>, score: &mut i32) {
+        match self.direction {
+            'L' => self.x = if self.x > 0 { self.x - 1 } else { buf[0].len() - 1 },
+            'R' => self.x = if self.x < buf[0].len() - 1 { self.x + 1 } else { 0 },
+            'U' => self.y = if self.y > 0 { self.y - 1 } else { buf.len() - 1 },
+            'D' => self.y = if self.y < buf.len() - 1 { self.y + 1 } else { 0 },
+            _ => {}
+        }
+        if self.character == 'C' {
+            self.character = 'O';
+        } else {
+            self.character = 'C';
+        }
+        if buf[self.y][self.x] == '.' {
+            *score += 1;
+        }
+        buf[self.y][self.x] = self.character;
+    }
+}
+
+impl App {
+    pub fn new(exit: bool, character: Character) -> Self {
+        Self { exit, character, board: vec![], score: 0 ,
+        //wall: Rect::new(5,5,2,2)
+    }}
+    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
+        self.generate_board(&terminal.get_frame().area());
+        while !self.exit {
+            self.update_board(self.character.x, self.character.y);
+            self.character.render(&mut self.board, &mut self.score);
+            //self.wall.render(&mut self.board);
+            terminal.draw(|f: &mut Frame<'_>| {
+                self.draw(f);
+            })?;
+            /*terminal.draw(| z: &mut Frame<'_>| {
+                self.draw_wall(z);
+            })*/
+            
+            if event::poll(std::time::Duration::from_millis(100))? {
+                if let Event::Key(key_event) = event::read()? {
+                    if key_event.kind == KeyEventKind::Press {
+                        self.handle_input(key_event);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn handle_input(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Char('q') => self.exit = true,
+            _ => self.character.handle_input(key_event),
+        }
+    }
+
+    pub fn draw(&self, f: &mut Frame) {
+        let area = f.area();
+        //let rect = Rect::new(0,0, 2,2);
+        //let rect = Rect::new(self.character., self.character.y,2,2);
+        if self.character.x <= u16::MAX as usize && self.character.y <= u16::MAX as usize {
+            let convert: u16 = self.character.x as u16;
+            let converty: u16 = self.character.y as u16;
+            let rect = Rect::new(convert, converty,2,2);
+            f.render_widget(self, area);
+            f.render_widget(self,rect);
+        }
+        else{
+        f.render_widget(self, area);}
+        //f.render_widget(self,rect);
+    }
+
+    pub fn generate_board(&mut self, area: &Rect) {
+        self.board = vec![vec!['.'; area.width as usize]; area.height as usize];
+    }
+    /*pub fn draw_wall (&self, z: &mut Frame){
+        let rect = Rect::new(0,0, 2,2);
+        z.render_widget(self, rect);
+    } */
+
+//'.'; area.width as usize
+    pub fn update_board(&mut self, x: usize, y: usize) {
+        self.board[y][x] = ' ';
+    }
+            
+}
+
+impl Widget for &App {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let title = Line::from((" Score: ".to_owned() + &self.score.to_string() + " ").bold());
+        let instructions = Line::from(vec![
+            " Left ".into(),
+            "<Left>".blue().bold(),
+            " Right ".into(),
+            "<Right>".blue().bold(),
+            " Up ".into(),
+            "<Up>".blue().bold(),
+            " Down ".into(),
+            "<Down>".blue().bold(),
+            " Quit ".into(),
+            "<Q> ".blue().bold(),
+        ]);
+        let block = Block::bordered()
+            .title(title.centered())
+            .title_bottom(instructions.centered())
+            .border_set(border::THICK);
+
+        let text = self.board.iter().map(|row| row.iter().collect::<String>()).collect::<Vec<_>>().join("\n");
+
+        Paragraph::new(Text::from(text))
+            .block(block)
+            .render(area, buf);
+    }
+    
+}
+
