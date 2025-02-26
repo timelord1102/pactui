@@ -28,6 +28,7 @@ pub struct Character {
     speed: u128,
     speed_boost: bool,
     boost_timer: i32,
+    fruits: String,
 }
 
 #[derive(Debug)]
@@ -50,6 +51,7 @@ impl Character {
             speed: 100,
             speed_boost: false,
             boost_timer: 0,
+            fruits: String::new(),
         }
     }
 
@@ -119,6 +121,14 @@ impl Character {
         if buf[self.y][self.x].to_string() == "·" {
             *score += 1;
         }
+        if buf[self.y][self.x].to_string() == "∞" {
+            *score += 100;
+            if self.fruits.len() == 0 {
+                self.fruits.push(' ');
+            }
+            self.fruits.push('∞');
+            self.fruits.push(' ');
+        }
 
         if buf[self.y][self.x].to_string() == ">" {
             self.speed = 50;
@@ -156,6 +166,12 @@ impl App {
                         }
                     }
                 }
+            }
+
+            if self.score == 70 {
+                let x = self.board[0].len() / 2;
+                let y = self.board.len() / 2;
+                self.board[y][x] = colorize('∞');
             }
         }
         Ok(())
@@ -207,7 +223,11 @@ impl App {
 
 impl Widget for &App {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from((" Score: ".to_owned() + &self.score.to_string() + " ").bold());
+        let title = Line::from(vec![
+            " Score: ".into(),
+            self.score.to_string().into(),
+            " ".into(),
+        ]);
         let instructions = Line::from(vec![
             " Left ".into(),
             "<Left>".blue().bold(),
@@ -220,8 +240,33 @@ impl Widget for &App {
             " Quit ".into(),
             "<Q> ".blue().bold(),
         ]);
+
+        let lives = Line::from(vec![" C C C ".yellow().bold()]);
+
+        let powerups = Line::from(vec![if self.character.speed_boost
+            && (self.character.boost_timer > 10
+                || (self.character.boost_timer < 10 && self.character.boost_timer % 2 == 0))
+        {
+            " > ".light_cyan().bold()
+        } else if self.character.speed_boost {
+            "   ".into()
+        } else {
+            "".into()
+        }]);
+
+        let fruits = Line::from(
+            self.character
+                .fruits
+                .chars()
+                .map(|ch| colorize(ch))
+                .collect::<Vec<Span<'static>>>(),
+        );
+
         let block = Block::bordered()
             .title(title.centered())
+            .title(lives.left_aligned())
+            .title(fruits.right_aligned())
+            .title(powerups.left_aligned())
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
@@ -247,6 +292,7 @@ pub fn colorize(ch: char) -> Span<'static> {
     match ch {
         'C' | 'O' => ch.to_string().yellow().bold(),
         '>' => ch.to_string().light_cyan().bold(),
+        '∞' => ch.to_string().light_red().bold(),
         _ => ch.to_string().not_dim(),
     }
 }
