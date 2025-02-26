@@ -1,15 +1,14 @@
-use std::io;
-
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
     style::Stylize,
     symbols::border,
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{Block, Paragraph, Widget},
     DefaultTerminal, Frame,
 };
+use std::io;
 
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
@@ -32,7 +31,7 @@ pub struct Character {
 pub struct App {
     exit: bool,
     character: Character,
-    board: Vec<Vec<char>>,
+    board: Vec<Vec<Span<'static>>>,
     score: i32,
 }
 
@@ -58,7 +57,7 @@ impl Character {
         }
     }
 
-    fn render(&mut self, buf: &mut Vec<Vec<char>>, score: &mut i32) {
+    fn render(&mut self, buf: &mut Vec<Vec<Span<'static>>>, score: &mut i32) {
         if std::time::Instant::now()
             .duration_since(self.move_time)
             .as_millis()
@@ -68,14 +67,14 @@ impl Character {
             match self.direction {
                 'L' => {
                     self.x = if self.x > 0 {
-                        self.x - 1
+                        self.x - 2
                     } else {
-                        buf[0].len() - 1
+                        buf[0].len() - 2
                     }
                 }
                 'R' => {
-                    self.x = if self.x < buf[0].len() - 1 {
-                        self.x + 1
+                    self.x = if self.x < buf[0].len() - 2 {
+                        self.x + 2
                     } else {
                         0
                     }
@@ -96,16 +95,16 @@ impl Character {
                 }
                 _ => {}
             }
-            if self.character == 'C' {
+            if self.character == 'C' && self.direction != ' ' {
                 self.character = 'O';
-            } else {
+            } else if self.character == 'O' && self.direction != ' ' {
                 self.character = 'C';
             }
-            if buf[self.y][self.x] == '.' {
-                *score += 1;
-            }
         }
-        buf[self.y][self.x] = self.character;
+        if buf[self.y][self.x].to_string() == "•" {
+            *score += 1;
+        }
+        buf[self.y][self.x] = colorize(self.character);
     }
 }
 
@@ -153,11 +152,19 @@ impl App {
     }
 
     pub fn generate_board(&mut self, area: &Rect) {
-        self.board = vec![vec!['.'; area.width as usize]; area.height as usize];
+        self.board =
+            vec![vec![colorize(' '); (area.width - 1) as usize]; (area.height - 2) as usize];
+        for y in 0..self.board.len() {
+            for x in 0..self.board[y].len() {
+                if x % 2 == 0 {
+                    self.board[y][x] = colorize('•');
+                }
+            }
+        }
     }
 
     pub fn update_board(&mut self, x: usize, y: usize) {
-        self.board[y][x] = ' ';
+        self.board[y][x] = colorize(' ');
     }
 }
 
@@ -181,15 +188,27 @@ impl Widget for &App {
             .title_bottom(instructions.centered())
             .border_set(border::THICK);
 
-        let text = self
+        let text: Vec<Line> = self
             .board
             .iter()
-            .map(|row| row.iter().collect::<String>())
-            .collect::<Vec<_>>()
-            .join("\n");
+            .map(|row| {
+                Line::from(
+                    row.iter()
+                        .map(|ch| ch.clone())
+                        .collect::<Vec<Span<'static>>>(),
+                )
+            })
+            .collect();
 
         Paragraph::new(Text::from(text))
             .block(block)
             .render(area, buf);
+    }
+}
+
+pub fn colorize(ch: char) -> Span<'static> {
+    match ch {
+        'C' | 'O' => ch.to_string().yellow().bold(),
+        _ => ch.to_string().white(),
     }
 }
