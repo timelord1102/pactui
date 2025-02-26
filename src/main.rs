@@ -1,4 +1,5 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use rand::Rng;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -25,6 +26,8 @@ pub struct Character {
     direction: char,
     move_time: std::time::Instant,
     speed: u128,
+    speed_boost: bool,
+    boost_timer: i32,
 }
 
 #[derive(Debug)]
@@ -44,6 +47,8 @@ impl Character {
             direction: ' ',
             move_time: std::time::Instant::now(),
             speed: 100,
+            speed_boost: false,
+            boost_timer: 0,
         }
     }
 
@@ -64,6 +69,7 @@ impl Character {
             >= self.speed
         {
             self.move_time = std::time::Instant::now();
+            buf[self.y][self.x] = colorize(' ');
             match self.direction {
                 'L' => {
                     self.x = if self.x > 0 {
@@ -100,10 +106,25 @@ impl Character {
             } else if self.character == 'O' && self.direction != ' ' {
                 self.character = 'C';
             }
+
+            if self.speed_boost {
+                self.boost_timer -= 1;
+                if self.boost_timer == 0 {
+                    self.speed = 100;
+                    self.speed_boost = false;
+                }
+            }
         }
-        if buf[self.y][self.x].to_string() == "•" {
+        if buf[self.y][self.x].to_string() == "·" {
             *score += 1;
         }
+
+        if buf[self.y][self.x].to_string() == ">" {
+            self.speed = 5;
+            self.speed_boost = true;
+            self.boost_timer += 100;
+        }
+
         buf[self.y][self.x] = colorize(self.character);
     }
 }
@@ -120,7 +141,6 @@ impl App {
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         self.generate_board(&terminal.get_frame().area());
         while !self.exit {
-            self.update_board(self.character.x, self.character.y);
             self.character.render(&mut self.board, &mut self.score);
             terminal.draw(|f| {
                 self.draw(f);
@@ -157,14 +177,16 @@ impl App {
         for y in 0..self.board.len() {
             for x in 0..self.board[y].len() {
                 if x % 2 == 0 {
-                    self.board[y][x] = colorize('•');
+                    self.board[y][x] = colorize('·');
                 }
             }
         }
-    }
 
-    pub fn update_board(&mut self, x: usize, y: usize) {
-        self.board[y][x] = colorize(' ');
+        for _ in 0..3 {
+            let x = rand::rng().random_range(0..self.board[0].len() / 2) * 2;
+            let y = rand::rng().random_range(0..self.board.len());
+            self.board[y][x] = colorize('>');
+        }
     }
 }
 
@@ -209,6 +231,7 @@ impl Widget for &App {
 pub fn colorize(ch: char) -> Span<'static> {
     match ch {
         'C' | 'O' => ch.to_string().yellow().bold(),
-        _ => ch.to_string().white(),
+        '>' => ch.to_string().light_cyan().bold(),
+        _ => ch.to_string().not_dim(),
     }
 }
