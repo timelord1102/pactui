@@ -169,8 +169,11 @@ impl App {
             }
 
             if self.score == 70 {
-                let x = self.board[0].len() / 2;
+                let mut x = self.board[0].len() / 2;
                 let y = self.board.len() / 2;
+                if x % 2 != 0 {
+                    x -= 1;
+                }
                 self.board[y][x] = colorize('∞');
             }
         }
