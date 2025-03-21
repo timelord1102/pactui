@@ -152,6 +152,7 @@ impl App {
     }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         self.generate_board(&terminal.get_frame().area());
+        
         while !self.exit {
             self.character.render(&mut self.board, &mut self.score);
             terminal.draw(|f| {
@@ -195,8 +196,19 @@ impl App {
             vec![vec![colorize(' '); (area.width - 1) as usize]; (area.height - 2) as usize];
         for y in 0..self.board.len() {
             for x in 0..self.board[y].len() {
-                if x % 2 == 0 {
-                    self.board[y][x] = colorize('·');
+                if y == 0 && x % 2 ==0 && x > ((area.width/3) as usize) && x < ((area.width) as usize - (area.width/3) as usize){
+                    self.board[y][x] = colorize('x');
+                }
+                else if y > 0 && y < (area.height/2) as usize{
+                    if (x > (area.width/4) as usize && x < ((area.width) as usize )- (area.width/4) as usize) && x % 2 == 0 && x % 3 == 0{
+                        self.board[y][x] = colorize('x');
+                    }
+                    else if x % 2 == 0{
+                        self.board[y][x] = colorize('.');
+                    }
+                }
+                else if x % 2 == 0 {
+                    self.board[y][x] = colorize('.');
                 }
             }
         }
@@ -219,6 +231,9 @@ impl App {
         }
         self.cheat.clear();
     }
+    //pub fn grid_scale(&mut self){
+      //  grid = [
+    //}
 }
 
 impl Widget for &App {
