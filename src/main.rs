@@ -192,9 +192,37 @@ impl App {
     }
 
     pub fn generate_board(&mut self, area: &Rect) {
-        self.board =
-            vec![vec![colorize(' '); (area.width - 1) as usize]; (area.height - 2) as usize];
-        for y in 0..self.board.len() {
+        self.board =vec![vec![colorize('.'); (area.width - 1) as usize]; (area.height - 2) as usize];
+        let grid = vec![[colorize('x'), colorize('x'), colorize('x'), colorize('x'), colorize('x')],
+                                    [colorize('x'), colorize('.'), colorize('x'), colorize('.'), colorize('.')],
+                                    [colorize('x'), colorize('.'), colorize('x'), colorize('.'), colorize('x')],
+                                    [colorize('x'), colorize('x'), colorize('.'), colorize('x'), colorize('x')]];
+        let left = (area.width / 5) as usize;
+        let left_middle = left + left;
+        let half = (area.width / 2) as usize;
+        //let val = 0 as usize;
+
+        for val in 0..area.width as usize{
+            if(val < (half/5) as usize && val % 2 == 0) {
+                self.board[0][val] = grid[2][0].clone();
+            }
+            else if (val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0) {
+                self.board[0][val] = grid[2][1].clone();
+            }
+            else if (val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0){
+                self.board[0][val] = grid[2][2].clone();
+            }
+            else if (val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0){
+                self.board[0][val] = grid[2][3].clone();
+            }
+            else if(val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0) {
+                self.board[0][val] = grid[2][4].clone();
+            }
+            
+
+        }
+
+        /*for y in 0..self.board.len() {
             for x in 0..self.board[y].len() {
                 if y == 0 && x % 2 ==0 && x > ((area.width/3) as usize) && x < ((area.width) as usize - (area.width/3) as usize){
                     self.board[y][x] = colorize('x');
@@ -211,7 +239,7 @@ impl App {
                     self.board[y][x] = colorize('.');
                 }
             }
-        }
+        }*/
 
         for _ in 0..3 {
             let x = rand::rng().random_range(0..self.board[0].len() / 2) * 2;
@@ -231,9 +259,6 @@ impl App {
         }
         self.cheat.clear();
     }
-    //pub fn grid_scale(&mut self){
-      //  grid = [
-    //}
 }
 
 impl Widget for &App {
