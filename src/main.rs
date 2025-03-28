@@ -194,32 +194,111 @@ impl App {
     pub fn generate_board(&mut self, area: &Rect) {
         self.board =vec![vec![colorize('.'); (area.width - 1) as usize]; (area.height - 2) as usize];
         let grid = vec![[colorize('x'), colorize('x'), colorize('x'), colorize('x'), colorize('x')],
-                                    [colorize('x'), colorize('.'), colorize('x'), colorize('.'), colorize('.')],
-                                    [colorize('x'), colorize('.'), colorize('x'), colorize('.'), colorize('x')],
+                                    [colorize('x'), colorize('x'), colorize('.'), colorize('.'), colorize('x')],
+                                    [colorize('.'), colorize('.'), colorize('x'), colorize('.'), colorize('x')],
                                     [colorize('x'), colorize('x'), colorize('.'), colorize('x'), colorize('x')]];
         let left = (area.width / 5) as usize;
         let left_middle = left + left;
         let half = (area.width / 2) as usize;
+        let mut height_quart: bool = false;
+        let mut height_half: bool = false;
+        let mut height_three_quart : bool= false;
+        let mut height_full: bool = false;
+        let height_quart_bound = (((area.height -2)/4 )/2) as usize;
+        let height_half_bound = (((area.height -2)/ 2)/2) as usize;
+        let height_three_quart_bound = height_quart_bound + height_half_bound;
+
         //let val = 0 as usize;
+        for row in 0..(area.height -2) as usize{
+            height_quart = if row < height_quart_bound  {true} else {false};
+            height_half = if row > height_quart_bound as usize && row < height_half_bound{true} else {false};
+            height_three_quart = if row > height_half_bound && row < height_three_quart_bound {true} else {false};
+            height_full = if row > height_three_quart_bound && row < (area.height -2) as usize {true} else {false};
 
-        for val in 0..area.width as usize{
-            if(val < (half/5) as usize && val % 2 == 0) {
-                self.board[0][val] = grid[2][0].clone();
-            }
-            else if (val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0) {
-                self.board[0][val] = grid[2][1].clone();
-            }
-            else if (val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0){
-                self.board[0][val] = grid[2][2].clone();
-            }
-            else if (val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0){
-                self.board[0][val] = grid[2][3].clone();
-            }
-            else if(val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0) {
-                self.board[0][val] = grid[2][4].clone();
-            }
-            
 
+            for val in 0..area.width as usize{
+                if (height_quart){
+                    if val < (half/5) as usize && val % 2 == 0{
+                        self.board[row][val] = grid[0][0].clone();
+                    }
+                    else if val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0 {
+                        self.board[row][val] = grid[0][1].clone();
+                    }
+                    else if val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0{
+                        self.board[row][val] = grid[0][2].clone();
+                    }
+                    else if val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0{
+                        self.board[row][val] = grid[0][3].clone();
+                    }
+                    else if val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0 {
+                        self.board[row][val] = grid[0][4].clone();
+                    }
+                    else if val % 2 != 0 {
+                        self.board[row][val] = colorize(' ');
+                    }
+                }
+                else if(height_half){
+                    if val < (half/5) as usize && val % 2 == 0{
+                        self.board[row][val] = grid[1][0].clone();
+                    }
+                    else if val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0 {
+                        self.board[row][val] = grid[1][1].clone();
+                    }
+                    else if val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0{
+                        self.board[row][val] = grid[1][2].clone();
+                    }
+                    else if val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0{
+                        self.board[row][val] = grid[1][3].clone();
+                    }
+                    else if val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0 {
+                        self.board[row][val] = grid[1][4].clone();
+                    }
+                    else if val % 2 != 0 {
+                        self.board[row][val] = colorize(' ');
+                    }
+                }
+                else if (height_three_quart){
+                    if val < (half/5) as usize && val % 2 == 0{
+                        self.board[row][val] = grid[2][0].clone();
+                    }
+                    else if val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0 {
+                        self.board[row][val] = grid[2][1].clone();
+                    }
+                    else if val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0{
+                        self.board[row][val] = grid[2][2].clone();
+                    }
+                    else if val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0{
+                        self.board[row][val] = grid[2][3].clone();
+                    }
+                    else if val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0 {
+                        self.board[row][val] = grid[2][4].clone();
+                    }
+                    else if val % 2 != 0 {
+                        self.board[row][val] = colorize(' ');
+                    }
+                }
+                else if(height_full){
+                    if val < (half/5) as usize && val % 2 == 0{
+                        self.board[row][val] = grid[3][0].clone();
+                    }
+                    else if val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0 {
+                        self.board[row][val] = grid[3][1].clone();
+                    }
+                    else if val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0{
+                        self.board[row][val] = grid[3][2].clone();
+                    }
+                    else if val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0{
+                        self.board[row][val] = grid[3][3].clone();
+                    }
+                    else if val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0 {
+                        self.board[row][val] = grid[3][4].clone();
+                    }
+                    else if val % 2 != 0 {
+                        self.board[row][val] = colorize(' ');
+                    }
+                }
+        
+            }
         }
 
         /*for y in 0..self.board.len() {
