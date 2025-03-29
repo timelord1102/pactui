@@ -192,11 +192,16 @@ impl App {
     }
 
     pub fn generate_board(&mut self, area: &Rect) {
+        //may need to create logic to decode different characters
+            //ex: x is one unit wide wall
+            // z is two unit wide wall
+            // n is three unit wall
+            //
         self.board =vec![vec![colorize('.'); (area.width - 1) as usize]; (area.height - 2) as usize];
-        let grid = vec![[colorize('x'), colorize('x'), colorize('x'), colorize('x'), colorize('x')],
-                                    [colorize('x'), colorize('x'), colorize('.'), colorize('.'), colorize('x')],
-                                    [colorize('.'), colorize('.'), colorize('x'), colorize('.'), colorize('x')],
-                                    [colorize('x'), colorize('x'), colorize('.'), colorize('x'), colorize('x')]];
+        let grid = vec![[colorize('x'), colorize('x'), colorize('.'), colorize('.'), colorize('.')],
+                                    [colorize('x'), colorize('x'), colorize('x'), colorize('x'), colorize('.')],
+                                    [colorize('x'), colorize('.'), colorize('.'), colorize('x'), colorize('.')],
+                                    [colorize('.'), colorize('.'), colorize('.'), colorize('.'), colorize('.')]];
         let left = (area.width / 5) as usize;
         let left_middle = left + left;
         let half = (area.width / 2) as usize;
@@ -209,14 +214,14 @@ impl App {
         let height_three_quart_bound = height_quart_bound + height_half_bound;
 
         //let val = 0 as usize;
-        for row in 0..(area.height -2) as usize{
+        for row in 1..(area.height -2) as usize{
             height_quart = if row < height_quart_bound  {true} else {false};
             height_half = if row > height_quart_bound as usize && row < height_half_bound{true} else {false};
             height_three_quart = if row > height_half_bound && row < height_three_quart_bound {true} else {false};
             height_full = if row > height_three_quart_bound && row < (area.height -2) as usize {true} else {false};
 
 
-            for val in 0..area.width as usize{
+            for val in 1..area.width as usize{
                 if (height_quart){
                     if val < (half/5) as usize && val % 2 == 0{
                         self.board[row][val] = grid[0][0].clone();
