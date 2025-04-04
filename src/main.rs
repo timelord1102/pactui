@@ -89,9 +89,26 @@ impl Maze {
     }
 
     // Optional: print the maze to the terminal
+    //for proof of cooncept
+    fn display(&self) {
+        println!("{}", "_".repeat(WIDTH*2));
+        for y in 0..HEIGHT {
+            let mut line = String::from("|");
+            for x in 0..WIDTH {
+                let cell = &self.cells[x][y];
+                let bottom = if cell.contains(&Direction::Down) {" "} else {"_"};
+                let right  = if cell.contains(&Direction::Right) {" "} else {"|"};
+                line.push_str(bottom);
+                line.push_str(right);
+
+            }
+            println!("{}",line);
+        }
+    }
 }
 
 fn main() {
     let mut maze = Maze::new(WIDTH, HEIGHT);
     maze.generate();
+    maze.display();
 }
