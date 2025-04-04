@@ -1,422 +1,97 @@
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
-use rand::Rng;
-use ratatui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::Stylize,
-    symbols::border,
-    text::{Line, Span, Text},
-    widgets::{Block, Paragraph, Widget},
-    DefaultTerminal, Frame,
-};
-use std::io;
+use rand::seq::SliceRandom;
+use rand::thread_rng;
+use std::collections::HashSet;
 
-fn main() -> io::Result<()> {
-    let mut terminal = ratatui::init();
-    let app_result = App::new(false, Character::new(0, 0, 'C')).run(&mut terminal);
-    ratatui::restore();
-    app_result
+// Define the grid size
+const WIDTH: usize = 10;
+const HEIGHT: usize = 10;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct Cell(usize, usize); // (x, y)
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
+
+impl Direction {
+    fn delta(self) -> (isize, isize) {
+        match self {
+            Direction::Up => (0, -1),
+            Direction::Down => (0, 1),
+            Direction::Left => (-1, 0),
+            Direction::Right => (1, 0),
+        }
+    }
+
+    fn opposite(self) -> Self {
+        match self {
+            Direction::Up => Direction::Down,
+            Direction::Down => Direction::Up,
+            Direction::Left => Direction::Right,
+            Direction::Right => Direction::Left,
+        }
+    }
+}
+
+// Maze is a 2D grid with walls between cells.
+// We'll store for each cell which directions have passages (i.e., no wall).
 #[derive(Debug)]
-pub struct Character {
-    x: usize,
-    y: usize,
-    character: char,
-    direction: char,
-    move_time: std::time::Instant,
-    speed: u128,
-    speed_boost: bool,
-    boost_timer: i32,
-    fruits: String,
+struct Maze {
+    cells: Vec<Vec<HashSet<Direction>>>, // Each cell has a set of open directions
 }
 
-#[derive(Debug)]
-pub struct App {
-    exit: bool,
-    character: Character,
-    board: Vec<Vec<Span<'static>>>,
-    score: i32,
-    cheat: String,
+impl Maze {
+    fn new(width: usize, height: usize) -> Self {
+        let cells = vec![vec![HashSet::new(); height]; width];
+        Self { cells }
+    }
+    //function used to determine whether the next direction is in bounds
+    fn in_bounds(&self, x: isize, y: isize) -> bool {
+        x >= 0 && x < WIDTH as isize && y >= 0 && y < HEIGHT as isize
+    }
+    //function used to create a passage from the current cell to the next cell
+    fn add_passage(&mut self, from: Cell, to: Cell, dir: Direction) {
+        self.cells[from.0][from.1].insert(dir);
+        self.cells[to.0][to.1].insert(dir.opposite());
+    }
+    //function begins the generation of the board and initializes the backtracker function with the starting location
+    fn generate(&mut self) {
+        let mut visited = HashSet::new();
+        let start = Cell(0, 0);
+        self.backtracker(start, &mut visited);
+    }
+    //back tracker function. this recursively calls itself (dfs) in order to create a maze
+    fn backtracker(&mut self, current: Cell, visited: &mut HashSet<Cell>) {
+        visited.insert(current);
+
+        let mut rng = thread_rng();
+        let mut directions = vec![Direction::Up, Direction::Down, Direction::Left, Direction::Right];
+        directions.shuffle(&mut rng);
+
+        for dir in directions {
+            let (dx, dy) = dir.delta();
+            let new_x = current.0 as isize + dx;
+            let new_y = current.1 as isize + dy;
+
+            if self.in_bounds(new_x, new_y) {
+                let neighbor = Cell(new_x as usize, new_y as usize);
+                if !visited.contains(&neighbor) {
+                    self.add_passage(current, neighbor, dir);
+                    self.backtracker(neighbor, visited);
+                }
+            }
+        }
+    }
+
+    // Optional: print the maze to the terminal
 }
 
-impl Character {
-    pub fn new(x: usize, y: usize, character: char) -> Self {
-        Self {
-            x,
-            y,
-            character,
-            direction: ' ',
-            move_time: std::time::Instant::now(),
-            speed: 100,
-            speed_boost: false,
-            boost_timer: 0,
-            fruits: String::new(),
-        }
-    }
-
-    fn handle_input(&mut self, key_event: KeyEvent, cheat: &mut String) {
-        match key_event.code {
-            KeyCode::Left => self.direction = 'L',
-            KeyCode::Right => self.direction = 'R',
-            KeyCode::Up => self.direction = 'U',
-            KeyCode::Down => self.direction = 'D',
-            _ => cheat.push(key_event.code.to_string().chars().next().unwrap()),
-        }
-    }
-
-    fn render(&mut self, buf: &mut Vec<Vec<Span<'static>>>, score: &mut i32) {
-        if std::time::Instant::now()
-            .duration_since(self.move_time)
-            .as_millis()
-            >= self.speed
-        {
-            self.move_time = std::time::Instant::now();
-            buf[self.y][self.x] = colorize(' ');
-            match self.direction {
-                'L' => {
-                    self.x = if self.x > 0 {
-                        self.x - 2
-                    } else {
-                        buf[0].len() - 2
-                    }
-                }
-                'R' => {
-                    self.x = if self.x < buf[0].len() - 2 {
-                        self.x + 2
-                    } else {
-                        0
-                    }
-                }
-                'U' => {
-                    self.y = if self.y > 0 {
-                        self.y - 1
-                    } else {
-                        buf.len() - 1
-                    }
-                }
-                'D' => {
-                    self.y = if self.y < buf.len() - 1 {
-                        self.y + 1
-                    } else {
-                        0
-                    }
-                }
-                _ => {}
-            }
-            if self.character == 'C' && self.direction != ' ' {
-                self.character = 'O';
-            } else if self.character == 'O' && self.direction != ' ' {
-                self.character = 'C';
-            }
-
-            if self.speed_boost {
-                self.boost_timer -= 1;
-                if self.boost_timer == 0 {
-                    self.speed = 100;
-                    self.speed_boost = false;
-                }
-            }
-        }
-        if buf[self.y][self.x].to_string() == "·" {
-            *score += 1;
-        }
-        if buf[self.y][self.x].to_string() == "∞" {
-            *score += 100;
-            if self.fruits.len() == 0 {
-                self.fruits.push(' ');
-            }
-            self.fruits.push('∞');
-            self.fruits.push(' ');
-        }
-
-        if buf[self.y][self.x].to_string() == ">" {
-            self.speed = 50;
-            self.speed_boost = true;
-            self.boost_timer += 100;
-        }
-
-        buf[self.y][self.x] = colorize(self.character);
-    }
-}
-
-impl App {
-    pub fn new(exit: bool, character: Character) -> Self {
-        Self {
-            exit,
-            character,
-            board: vec![],
-            score: 0,
-            cheat: String::new(),
-        }
-    }
-    pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
-        self.generate_board(&terminal.get_frame().area());
-        
-        while !self.exit {
-            self.character.render(&mut self.board, &mut self.score);
-            terminal.draw(|f| {
-                self.draw(f);
-            })?;
-            if event::poll(std::time::Duration::from_millis(0))? {
-                if let Event::Key(key_event) = event::read()? {
-                    if key_event.kind == KeyEventKind::Press {
-                        self.handle_input(key_event);
-                        while event::poll(std::time::Duration::from_millis(0))? {
-                            event::read()?;
-                        }
-                    }
-                }
-            }
-
-            if self.score == 70 {
-                let x = self.board[0].len() / 2;
-                let y = self.board.len() / 2;
-                self.board[y][x] = colorize('∞');
-            }
-        }
-        Ok(())
-    }
-
-    pub fn handle_input(&mut self, key_event: KeyEvent) {
-        match key_event.code {
-            KeyCode::Char('q') => self.exit = true,
-            KeyCode::Char('x') => self.run_cheat(),
-            _ => self.character.handle_input(key_event, &mut self.cheat),
-        }
-    }
-
-    pub fn draw(&self, f: &mut Frame) {
-        let area = f.area();
-        f.render_widget(self, area);
-    }
-
-    pub fn generate_board(&mut self, area: &Rect) {
-        //may need to create logic to decode different characters
-            //ex: x is one unit wide wall
-            // z is two unit wide wall
-            // n is three unit wall
-            //
-        self.board =vec![vec![colorize('.'); (area.width - 1) as usize]; (area.height - 2) as usize];
-        let grid = vec![[colorize('x'), colorize('x'), colorize('.'), colorize('.'), colorize('.')],
-                                    [colorize('x'), colorize('x'), colorize('x'), colorize('x'), colorize('.')],
-                                    [colorize('x'), colorize('.'), colorize('.'), colorize('x'), colorize('.')],
-                                    [colorize('.'), colorize('.'), colorize('.'), colorize('.'), colorize('.')]];
-        let left = (area.width / 5) as usize;
-        let left_middle = left + left;
-        let half = (area.width / 2) as usize;
-        let mut height_quart: bool = false;
-        let mut height_half: bool = false;
-        let mut height_three_quart : bool= false;
-        let mut height_full: bool = false;
-        let height_quart_bound = (((area.height -2)/4 )/2) as usize;
-        let height_half_bound = (((area.height -2)/ 2)/2) as usize;
-        let height_three_quart_bound = height_quart_bound + height_half_bound;
-
-        //let val = 0 as usize;
-        for row in 1..(area.height -2) as usize{
-            height_quart = if row < height_quart_bound  {true} else {false};
-            height_half = if row > height_quart_bound as usize && row < height_half_bound{true} else {false};
-            height_three_quart = if row > height_half_bound && row < height_three_quart_bound {true} else {false};
-            height_full = if row > height_three_quart_bound && row < (area.height -2) as usize {true} else {false};
-
-
-            for val in 1..area.width as usize{
-                if (height_quart){
-                    if val < (half/5) as usize && val % 2 == 0{
-                        self.board[row][val] = grid[0][0].clone();
-                    }
-                    else if val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0 {
-                        self.board[row][val] = grid[0][1].clone();
-                    }
-                    else if val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0{
-                        self.board[row][val] = grid[0][2].clone();
-                    }
-                    else if val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0{
-                        self.board[row][val] = grid[0][3].clone();
-                    }
-                    else if val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0 {
-                        self.board[row][val] = grid[0][4].clone();
-                    }
-                    else if val % 2 != 0 {
-                        self.board[row][val] = colorize(' ');
-                    }
-                }
-                else if(height_half){
-                    if val < (half/5) as usize && val % 2 == 0{
-                        self.board[row][val] = grid[1][0].clone();
-                    }
-                    else if val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0 {
-                        self.board[row][val] = grid[1][1].clone();
-                    }
-                    else if val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0{
-                        self.board[row][val] = grid[1][2].clone();
-                    }
-                    else if val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0{
-                        self.board[row][val] = grid[1][3].clone();
-                    }
-                    else if val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0 {
-                        self.board[row][val] = grid[1][4].clone();
-                    }
-                    else if val % 2 != 0 {
-                        self.board[row][val] = colorize(' ');
-                    }
-                }
-                else if (height_three_quart){
-                    if val < (half/5) as usize && val % 2 == 0{
-                        self.board[row][val] = grid[2][0].clone();
-                    }
-                    else if val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0 {
-                        self.board[row][val] = grid[2][1].clone();
-                    }
-                    else if val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0{
-                        self.board[row][val] = grid[2][2].clone();
-                    }
-                    else if val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0{
-                        self.board[row][val] = grid[2][3].clone();
-                    }
-                    else if val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0 {
-                        self.board[row][val] = grid[2][4].clone();
-                    }
-                    else if val % 2 != 0 {
-                        self.board[row][val] = colorize(' ');
-                    }
-                }
-                else if(height_full){
-                    if val < (half/5) as usize && val % 2 == 0{
-                        self.board[row][val] = grid[3][0].clone();
-                    }
-                    else if val > (half /5) as usize && val < ((half/5)*2)as usize && val % 2 == 0 {
-                        self.board[row][val] = grid[3][1].clone();
-                    }
-                    else if val > ((half/5)*2) as usize && val < ((half/5)*3) as usize && val % 2 ==0{
-                        self.board[row][val] = grid[3][2].clone();
-                    }
-                    else if val > ((half/5)*3) as usize && val < ((half/5)*4) as usize && val % 2 ==0{
-                        self.board[row][val] = grid[3][3].clone();
-                    }
-                    else if val > ((half/5)*4) as usize && val < ((half/5)*5) as usize && val % 2 ==0 {
-                        self.board[row][val] = grid[3][4].clone();
-                    }
-                    else if val % 2 != 0 {
-                        self.board[row][val] = colorize(' ');
-                    }
-                }
-        
-            }
-        }
-
-        /*for y in 0..self.board.len() {
-            for x in 0..self.board[y].len() {
-                if y == 0 && x % 2 ==0 && x > ((area.width/3) as usize) && x < ((area.width) as usize - (area.width/3) as usize){
-                    self.board[y][x] = colorize('x');
-                }
-                else if y > 0 && y < (area.height/2) as usize{
-                    if (x > (area.width/4) as usize && x < ((area.width) as usize )- (area.width/4) as usize) && x % 2 == 0 && x % 3 == 0{
-                        self.board[y][x] = colorize('x');
-                    }
-                    else if x % 2 == 0{
-                        self.board[y][x] = colorize('.');
-                    }
-                }
-                else if x % 2 == 0 {
-                    self.board[y][x] = colorize('.');
-                }
-            }
-        }*/
-
-        for _ in 0..3 {
-            let x = rand::rng().random_range(0..self.board[0].len() / 2) * 2;
-            let y = rand::rng().random_range(0..self.board.len());
-            self.board[y][x] = colorize('>');
-        }
-    }
-
-    pub fn run_cheat(&mut self) {
-        match self.cheat.as_str() {
-            "speed" => {
-                self.character.speed = 5;
-                self.character.speed_boost = true;
-                self.character.boost_timer += 1000;
-            }
-            _ => {}
-        }
-        self.cheat.clear();
-    }
-}
-
-impl Widget for &App {
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(vec![
-            " Score: ".into(),
-            self.score.to_string().into(),
-            " ".into(),
-        ]);
-        let instructions = Line::from(vec![
-            " Left ".into(),
-            "<Left>".blue().bold(),
-            " Right ".into(),
-            "<Right>".blue().bold(),
-            " Up ".into(),
-            "<Up>".blue().bold(),
-            " Down ".into(),
-            "<Down>".blue().bold(),
-            " Quit ".into(),
-            "<Q> ".blue().bold(),
-        ]);
-
-        let lives = Line::from(vec![" C C C ".yellow().bold()]);
-
-        let powerups = Line::from(vec![if self.character.speed_boost
-            && (self.character.boost_timer > 10
-                || (self.character.boost_timer < 10 && self.character.boost_timer % 2 == 0))
-        {
-            " > ".light_cyan().bold()
-        } else if self.character.speed_boost {
-            "   ".into()
-        } else {
-            "".into()
-        }]);
-
-        let fruits = Line::from(
-            self.character
-                .fruits
-                .chars()
-                .map(|ch| colorize(ch))
-                .collect::<Vec<Span<'static>>>(),
-        );
-
-        let block = Block::bordered()
-            .title(title.centered())
-            .title(lives.left_aligned())
-            .title(fruits.right_aligned())
-            .title(powerups.left_aligned())
-            .title_bottom(instructions.centered())
-            .border_set(border::THICK);
-
-        let text: Vec<Line> = self
-            .board
-            .iter()
-            .map(|row| {
-                Line::from(
-                    row.iter()
-                        .map(|ch| ch.clone())
-                        .collect::<Vec<Span<'static>>>(),
-                )
-            })
-            .collect();
-
-        Paragraph::new(Text::from(text))
-            .block(block)
-            .render(area, buf);
-    }
-}
-
-pub fn colorize(ch: char) -> Span<'static> {
-    match ch {
-        'C' | 'O' => ch.to_string().yellow().bold(),
-        '>' => ch.to_string().light_cyan().bold(),
-        '∞' => ch.to_string().light_red().bold(),
-        _ => ch.to_string().not_dim(),
-    }
+fn main() {
+    let mut maze = Maze::new(WIDTH, HEIGHT);
+    maze.generate();
 }
