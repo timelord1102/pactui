@@ -1,9 +1,11 @@
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+mod character;
+mod ghost;
 use rand::Rng;
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
-    style::Stylize,
+    style::{Color, Style, Stylize},
     symbols::border,
     text::{Line, Span, Text},
     widgets::{Block, Paragraph, Widget},
@@ -13,138 +15,27 @@ use std::io;
 
 fn main() -> io::Result<()> {
     let mut terminal = ratatui::init();
-    let app_result = App::new(false, Character::new(0, 0, 'C')).run(&mut terminal);
+    let app_result = App::new(false, character::Character::new(0, 0, 'C')).run(&mut terminal);
     ratatui::restore();
     app_result
 }
 
 #[derive(Debug)]
-pub struct Character {
-    x: usize,
-    y: usize,
-    character: char,
-    direction: char,
-    move_time: std::time::Instant,
-    speed: u128,
-    speed_boost: bool,
-    boost_timer: i32,
-    fruits: String,
-}
-
-#[derive(Debug)]
 pub struct App {
     exit: bool,
-    character: Character,
+    character: character::Character,
+    ghosts: Vec<ghost::Ghost>,
     board: Vec<Vec<Span<'static>>>,
     score: i32,
     cheat: String,
 }
 
-impl Character {
-    pub fn new(x: usize, y: usize, character: char) -> Self {
-        Self {
-            x,
-            y,
-            character,
-            direction: ' ',
-            move_time: std::time::Instant::now(),
-            speed: 100,
-            speed_boost: false,
-            boost_timer: 0,
-            fruits: String::new(),
-        }
-    }
-
-    fn handle_input(&mut self, key_event: KeyEvent, cheat: &mut String) {
-        match key_event.code {
-            KeyCode::Left => self.direction = 'L',
-            KeyCode::Right => self.direction = 'R',
-            KeyCode::Up => self.direction = 'U',
-            KeyCode::Down => self.direction = 'D',
-            _ => cheat.push(key_event.code.to_string().chars().next().unwrap()),
-        }
-    }
-
-    fn render(&mut self, buf: &mut Vec<Vec<Span<'static>>>, score: &mut i32) {
-        if std::time::Instant::now()
-            .duration_since(self.move_time)
-            .as_millis()
-            >= self.speed
-        {
-            self.move_time = std::time::Instant::now();
-            buf[self.y][self.x] = colorize(' ');
-            match self.direction {
-                'L' => {
-                    self.x = if self.x > 0 {
-                        self.x - 2
-                    } else {
-                        buf[0].len() - 2
-                    }
-                }
-                'R' => {
-                    self.x = if self.x < buf[0].len() - 2 {
-                        self.x + 2
-                    } else {
-                        0
-                    }
-                }
-                'U' => {
-                    self.y = if self.y > 0 {
-                        self.y - 1
-                    } else {
-                        buf.len() - 1
-                    }
-                }
-                'D' => {
-                    self.y = if self.y < buf.len() - 1 {
-                        self.y + 1
-                    } else {
-                        0
-                    }
-                }
-                _ => {}
-            }
-            if self.character == 'C' && self.direction != ' ' {
-                self.character = 'O';
-            } else if self.character == 'O' && self.direction != ' ' {
-                self.character = 'C';
-            }
-
-            if self.speed_boost {
-                self.boost_timer -= 1;
-                if self.boost_timer == 0 {
-                    self.speed = 100;
-                    self.speed_boost = false;
-                }
-            }
-        }
-        if buf[self.y][self.x].to_string() == "·" {
-            *score += 1;
-        }
-        if buf[self.y][self.x].to_string() == "∞" {
-            *score += 100;
-            if self.fruits.len() == 0 {
-                self.fruits.push(' ');
-            }
-            self.fruits.push('∞');
-            self.fruits.push(' ');
-        }
-
-        if buf[self.y][self.x].to_string() == ">" {
-            self.speed = 50;
-            self.speed_boost = true;
-            self.boost_timer += 100;
-        }
-
-        buf[self.y][self.x] = colorize(self.character);
-    }
-}
-
 impl App {
-    pub fn new(exit: bool, character: Character) -> Self {
+    pub fn new(exit: bool, character: character::Character) -> Self {
         Self {
             exit,
             character,
+            ghosts: vec![],
             board: vec![],
             score: 0,
             cheat: String::new(),
@@ -152,8 +43,46 @@ impl App {
     }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         self.generate_board(&terminal.get_frame().area());
+        self.ghosts
+            .push(ghost::Ghost::new('N', '3', "Pinky".to_string(), (0, 0)));
+
+        for i in 0..self.ghosts.len() {
+            let mut x = self.board[0].len() / 2;
+            if x % 2 != 0 {
+                x -= 1; // Ensure x is even for proper placement
+            }
+            self.ghosts[i].set_start(x, self.board.len() / 2 + i);
+        }
+        let res = self.main_loop(terminal);
+        if let Err(e) = res {
+            eprintln!("Error during game loop: {:?}", e);
+            self.exit = true; // Ensure we exit on error
+        }
+        Ok(())
+    }
+
+    fn main_loop(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()> {
         while !self.exit {
             self.character.render(&mut self.board, &mut self.score);
+            let mut lost_life = false;
+            for ghost in self.ghosts.iter() {
+                if ghost.x == self.character.x && ghost.y == self.character.y {
+                    self.character.lives -= 1;
+                    if self.character.lives <= 0 {
+                        self.exit = true;
+                        println!("Game Over! Your final score was: {}", self.score);
+                    }
+                    lost_life = true;
+                    break;
+                }
+            }
+
+            if lost_life {
+                break;
+            }
+            for ghost in self.ghosts.iter_mut() {
+                ghost.move_ghost(&mut self.board, (self.character.x, self.character.y));
+            }
             terminal.draw(|f| {
                 self.draw(f);
             })?;
@@ -174,7 +103,17 @@ impl App {
                 if x % 2 != 0 {
                     x -= 1;
                 }
-                self.board[y][x] = colorize('∞');
+                self.board[y][x] = colorize('∞', Color::Red);
+            }
+        }
+        if self.character.lives <= 0 {
+            println!("Game Over! Your final score was: {}", self.score);
+        } else {
+            if self.exit {
+                println!("Exiting game...");
+            } else {
+                self.reset_game();
+                self.main_loop(terminal)?;
             }
         }
         Ok(())
@@ -184,7 +123,9 @@ impl App {
         match key_event.code {
             KeyCode::Char('q') => self.exit = true,
             KeyCode::Char('x') => self.run_cheat(),
-            _ => self.character.handle_input(key_event, &mut self.cheat),
+            _ => self
+                .character
+                .handle_input(key_event, &mut self.cheat, &mut self.ghosts),
         }
     }
 
@@ -194,12 +135,14 @@ impl App {
     }
 
     pub fn generate_board(&mut self, area: &Rect) {
-        self.board =
-            vec![vec![colorize(' '); (area.width - 1) as usize]; (area.height - 2) as usize];
+        self.board = vec![
+            vec![colorize(' ', Color::White); (area.width - 1) as usize];
+            (area.height - 2) as usize
+        ];
         for y in 0..self.board.len() {
             for x in 0..self.board[y].len() {
                 if x % 2 == 0 {
-                    self.board[y][x] = colorize('·');
+                    self.board[y][x] = colorize('·', Color::White);
                 }
             }
         }
@@ -207,7 +150,7 @@ impl App {
         for _ in 0..3 {
             let x = rand::rng().random_range(0..self.board[0].len() / 2) * 2;
             let y = rand::rng().random_range(0..self.board.len());
-            self.board[y][x] = colorize('>');
+            self.board[y][x] = colorize('>', Color::LightCyan);
         }
     }
 
@@ -221,6 +164,13 @@ impl App {
             _ => {}
         }
         self.cheat.clear();
+    }
+
+    fn reset_game(&mut self) {
+        self.character.reset();
+        for ghost in self.ghosts.iter_mut() {
+            ghost.reset(&mut self.board);
+        }
     }
 }
 
@@ -244,7 +194,20 @@ impl Widget for &App {
             "<Q> ".blue().bold(),
         ]);
 
-        let lives = Line::from(vec![" C C C ".yellow().bold()]);
+        let mut lives_string = String::new();
+
+        for i in 0..3 {
+            if i < self.character.lives {
+                lives_string.push_str("C ");
+            } else {
+                lives_string.push_str("  "); // Empty hearts for remaining lives
+            }
+        }
+
+        let lives = Line::from(vec![
+            " Lives: ".into(),
+            lives_string.trim_end().yellow().bold().into(), // Trim to avoid trailing spaces
+        ]);
 
         let powerups = Line::from(vec![if self.character.speed_boost
             && (self.character.boost_timer > 10
@@ -261,7 +224,7 @@ impl Widget for &App {
             self.character
                 .fruits
                 .chars()
-                .map(|ch| colorize(ch))
+                .map(|ch| colorize(ch, Color::Yellow))
                 .collect::<Vec<Span<'static>>>(),
         );
 
@@ -291,11 +254,6 @@ impl Widget for &App {
     }
 }
 
-pub fn colorize(ch: char) -> Span<'static> {
-    match ch {
-        'C' | 'O' => ch.to_string().yellow().bold(),
-        '>' => ch.to_string().light_cyan().bold(),
-        '∞' => ch.to_string().light_red().bold(),
-        _ => ch.to_string().not_dim(),
-    }
+pub fn colorize(ch: char, color: Color) -> Span<'static> {
+    return Span::styled(ch.to_string(), Style::default().fg(color));
 }
