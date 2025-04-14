@@ -1,114 +1,120 @@
 use rand::seq::SliceRandom;
-use rand::thread_rng;
-use std::collections::HashSet;
+use rand::Rng;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
+use std::fmt;
 
-// Define the grid size
-const WIDTH: usize = 10;
-const HEIGHT: usize = 10;
+const WIDTH: usize = 27;
+const HEIGHT: usize = 30;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct Cell(usize, usize); // (x, y)
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-enum Direction {
-    Up,
-    Down,
-    Left,
-    Right,
+#[derive(Clone, Copy, PartialEq)]
+enum Tile {
+    Wall,
+    Path,
+    GhostHouse,
+    Portal,
 }
 
-
-impl Direction {
-    fn delta(self) -> (isize, isize) {
-        match self {
-            Direction::Up => (0, -1),
-            Direction::Down => (0, 1),
-            Direction::Left => (-1, 0),
-            Direction::Right => (1, 0),
-        }
-    }
-
-    fn opposite(self) -> Self {
-        match self {
-            Direction::Up => Direction::Down,
-            Direction::Down => Direction::Up,
-            Direction::Left => Direction::Right,
-            Direction::Right => Direction::Left,
-        }
+impl fmt::Display for Tile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let symbol = match self {
+            Tile::Wall       => '#',
+            Tile::Path       => ' ',
+            Tile::GhostHouse => '=',
+            Tile::Portal     => 'O',
+        };
+        write!(f, "{}", symbol)
     }
 }
 
-// Maze is a 2D grid with walls between cells.
-// We'll store for each cell which directions have passages (i.e., no wall).
-#[derive(Debug)]
-struct Maze {
-    cells: Vec<Vec<HashSet<Direction>>>, // Each cell has a set of open directions
-}
+// Define where the portal(s) should go in the half maze (on its left side)
+const PORTAL_ROWS: [usize; 1] = [HEIGHT / 2];
 
-impl Maze {
-    fn new(width: usize, height: usize) -> Self {
-        let cells = vec![vec![HashSet::new(); height]; width];
-        Self { cells }
-    }
-    //function used to determine whether the next direction is in bounds
-    fn in_bounds(&self, x: isize, y: isize) -> bool {
-        x >= 0 && x < WIDTH as isize && y >= 0 && y < HEIGHT as isize
-    }
-    //function used to create a passage from the current cell to the next cell
-    fn add_passage(&mut self, from: Cell, to: Cell, dir: Direction) {
-        self.cells[from.0][from.1].insert(dir);
-        self.cells[to.0][to.1].insert(dir.opposite());
-    }
-    //function begins the generation of the board and initializes the backtracker function with the starting location
-    fn generate(&mut self) {
-        let mut visited = HashSet::new();
-        let start = Cell(0, 0);
-        self.backtracker(start, &mut visited);
-    }
-    //back tracker function. this recursively calls itself (dfs) in order to create a maze
-    fn backtracker(&mut self, current: Cell, visited: &mut HashSet<Cell>) {
-        visited.insert(current);
-
-        let mut rng = thread_rng();
-        let mut directions = vec![Direction::Up, Direction::Down, Direction::Left, Direction::Right];
-        directions.shuffle(&mut rng);
-
-        for dir in directions {
-            let (dx, dy) = dir.delta();
-            let new_x = current.0 as isize + dx;
-            let new_y = current.1 as isize + dy;
-
-            if self.in_bounds(new_x, new_y) {
-                let neighbor = Cell(new_x as usize, new_y as usize);
-                if !visited.contains(&neighbor) {
-                    self.add_passage(current, neighbor, dir);
-                    self.backtracker(neighbor, visited);
+/// Generate a half maze without a right wall.
+/// We use (WIDTH+1)/2 as the half-maze width so that when mirrored, the full maze is WIDTH cells wide.
+fn generate_half_maze(rng: &mut impl Rng) -> Vec<Vec<Tile>> {
+    let half_width = (WIDTH + 1) / 2;
+    let mut maze = vec![vec![Tile::Wall; half_width]; HEIGHT];
+    
+    // Start maze carving from (1,1)
+    let mut frontier = vec![(1isize, 1isize)];
+    maze[1][1] = Tile::Path;
+    
+    let directions = [(0, 2), (2, 0), (0, -2), (-2, 0)];
+    
+    while let Some(&(x, y)) = frontier.last() {
+        let mut neighbors = Vec::new();
+        for &(dx, dy) in &directions {
+            let nx = x + dx;
+            let ny = y + dy;
+            if nx > 0 && ny > 0 && (nx as usize) < half_width && (ny as usize) < HEIGHT - 1 {
+                if maze[ny as usize][nx as usize] == Tile::Wall {
+                    neighbors.push((nx, ny, dx, dy));
                 }
             }
         }
-    }
-
-    // Optional: print the maze to the terminal
-    //for proof of cooncept
-    fn display(&self) {
-        println!("{}", "_".repeat(WIDTH*2));
-        for y in 0..HEIGHT {
-            let mut line = String::from("|");
-            for x in 0..WIDTH {
-                let cell = &self.cells[x][y];
-                let bottom = if cell.contains(&Direction::Down) {" "} else {"_"};
-                let right  = if cell.contains(&Direction::Right) {" "} else {"|"};
-                line.push_str(bottom);
-                line.push_str(right);
-
-            }
-            println!("{}",line);
+        if neighbors.is_empty() {
+            frontier.pop();
+            continue;
         }
+        let &(nx, ny, dx, dy) = neighbors.choose(rng).unwrap();
+        let mx = x + dx / 2;
+        let my = y + dy / 2;
+        maze[my as usize][mx as usize] = Tile::Path;
+        maze[ny as usize][nx as usize] = Tile::Path;
+        frontier.push((nx, ny));
+    }
+    
+    // Add ghost house in a center region in the left half.
+    // (Adjust these values as needed for your desired ghost house dimensions.)
+    let gh_top = HEIGHT / 2 - 1;
+    let gh_bottom = HEIGHT / 2 + 1;
+    let gh_left = half_width / 4;
+    let gh_right = half_width / 4 + 3;
+    for y in gh_top..=gh_bottom {
+        for x in gh_left..=gh_right {
+            if x < half_width {
+                maze[y][x] = Tile::GhostHouse;
+            }
+        }
+    }
+    
+    // Add portal(s) on the left side of the half maze.
+    for &row in &PORTAL_ROWS {
+        maze[row][0] = Tile::Portal;
+    }
+    
+    maze
+}
+
+/// Mirror the half maze horizontally to produce a full maze.
+fn mirror_maze(half: &[Vec<Tile>]) -> Vec<Vec<Tile>> {
+    let half_width = half[0].len();
+    let mut full = vec![vec![Tile::Wall; WIDTH]; HEIGHT];
+    for y in 0..HEIGHT {
+        for x in 0..half_width {
+            full[y][x] = half[y][x];
+            // Mirror to the right side.
+            full[y][WIDTH - 1 - x] = half[y][x];
+        }
+    }
+    full
+}
+
+fn print_maze(maze: &[Vec<Tile>]) {
+    for row in maze {
+        for &tile in row {
+            print!("{}", tile);
+        }
+        println!();
     }
 }
 
 fn main() {
-    let mut maze = Maze::new(WIDTH, HEIGHT);
-    maze.generate();
-    maze.display();
+    // Create one RNG instance and pass it to the maze generator.
+    let mut rng = StdRng::from_entropy();
+    let half = generate_half_maze(&mut rng);
+    let full = mirror_maze(&half);
+    print_maze(&full);
+    print_maze(&half);
 }
