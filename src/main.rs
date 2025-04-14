@@ -30,8 +30,7 @@ impl fmt::Display for Tile {
 // Define where the portal(s) should go in the half maze (on its left side)
 const PORTAL_ROWS: [usize; 1] = [HEIGHT / 2];
 
-/// Generate a half maze without a right wall.
-/// We use (WIDTH+1)/2 as the half-maze width so that when mirrored, the full maze is WIDTH cells wide.
+
 fn generate_half_maze(rng: &mut impl Rng) -> Vec<Vec<Tile>> {
     let half_width = (WIDTH + 1) / 2;
     let mut maze = vec![vec![Tile::Wall; half_width]; HEIGHT];
@@ -65,8 +64,7 @@ fn generate_half_maze(rng: &mut impl Rng) -> Vec<Vec<Tile>> {
         frontier.push((nx, ny));
     }
     
-    // Add ghost house in a center region in the left half.
-    // (Adjust these values as needed for your desired ghost house dimensions.)
+
     let gh_top = HEIGHT / 2 - 1;
     let gh_bottom = HEIGHT / 2 + 1;
     let gh_left = half_width / 4;
@@ -87,7 +85,7 @@ fn generate_half_maze(rng: &mut impl Rng) -> Vec<Vec<Tile>> {
     maze
 }
 
-/// Mirror the half maze horizontally to produce a full maze.
+// Mirror the half maze horizontally to produce a full maze.
 fn mirror_maze(half: &[Vec<Tile>]) -> Vec<Vec<Tile>> {
     let half_width = half[0].len();
     let mut full = vec![vec![Tile::Wall; WIDTH]; HEIGHT];
@@ -111,7 +109,6 @@ fn print_maze(maze: &[Vec<Tile>]) {
 }
 
 fn main() {
-    // Create one RNG instance and pass it to the maze generator.
     let mut rng = StdRng::from_entropy();
     let half = generate_half_maze(&mut rng);
     let full = mirror_maze(&half);
