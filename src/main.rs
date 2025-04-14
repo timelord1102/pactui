@@ -18,7 +18,7 @@ enum Tile {
 impl fmt::Display for Tile {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let symbol = match self {
-            Tile::Wall       => '#',
+            Tile::Wall       => '$',
             Tile::Path       => ' ',
             Tile::GhostHouse => '=',
             Tile::Portal     => 'O',
@@ -29,7 +29,6 @@ impl fmt::Display for Tile {
 
 // Define where the portal(s) should go in the half maze (on its left side)
 const PORTAL_ROWS: [usize; 1] = [HEIGHT / 2];
-
 
 fn generate_half_maze(rng: &mut impl Rng) -> Vec<Vec<Tile>> {
     let half_width = (WIDTH + 1) / 2;
@@ -64,7 +63,6 @@ fn generate_half_maze(rng: &mut impl Rng) -> Vec<Vec<Tile>> {
         frontier.push((nx, ny));
     }
     
-
     let gh_top = HEIGHT / 2 - 1;
     let gh_bottom = HEIGHT / 2 + 1;
     let gh_left = half_width / 4;
@@ -81,7 +79,30 @@ fn generate_half_maze(rng: &mut impl Rng) -> Vec<Vec<Tile>> {
     for &row in &PORTAL_ROWS {
         maze[row][0] = Tile::Portal;
     }
-    
+
+    // Minimize dead ends by selectively removing walls
+    let num_dead_end_removals = rng.gen_range(3..7);
+    for _ in 0..num_dead_end_removals {
+        let x = rng.gen_range(1..half_width - 1);
+        let y = rng.gen_range(1..HEIGHT - 1);
+        if maze[y][x] == Tile::Wall {
+            // Check if removing this wall creates a valid path connection
+            let mut path_neighbors = 0;
+            for &(dx, dy) in &directions {
+                let nx = x as isize + dx;
+                let ny = y as isize + dy;
+                if nx > 0 && ny > 0 && (nx as usize) < half_width && (ny as usize) < HEIGHT {
+                    if maze[ny as usize][nx as usize] == Tile::Path {
+                        path_neighbors += 1;
+                    }
+                }
+            }
+            if path_neighbors == 1 { // Prevent excessive connections
+                maze[y][x] = Tile::Path;
+            }
+        }
+    }
+
     maze
 }
 
@@ -113,5 +134,4 @@ fn main() {
     let half = generate_half_maze(&mut rng);
     let full = mirror_maze(&half);
     print_maze(&full);
-    print_maze(&half);
 }
